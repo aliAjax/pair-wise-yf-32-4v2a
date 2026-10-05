@@ -1,3 +1,56 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>器官分配协调台</title>
-<style>body{font:15px system-ui;max-width:1080px;margin:40px auto;background:#f5f7fb;padding:0 20px;color:#172033}section{background:white;padding:20px;border-radius:12px;box-shadow:0 2px 12px #0001}pre{background:#0f172a;color:#86efac;padding:16px;overflow:auto;border-radius:8px}input,button{font:inherit;padding:8px;margin:4px}button{background:#be123c;color:white;border:0;border-radius:6px}</style>
-<h1>器官分配协调台</h1><p>查看当前可用器官、候选患者和分配进度。写操作通过 JSON API 完成，医院接口需携带 X-Hospital。</p><section><input id="u" value="allocator"><input id="r" value="allocation_officer"><button onclick="load()">刷新</button><pre id="o"></pre></section><script>async function load(){let r=await fetch('/api/state',{headers:{'X-User-Id':u.value,'X-Role':r.value}});o.textContent=JSON.stringify(await r.json(),null,2)}load()</script>
+<style>
+body{font:15px system-ui;max-width:1080px;margin:40px auto;background:#f5f7fb;padding:0 20px;color:#172033}
+section{background:white;padding:20px;border-radius:12px;box-shadow:0 2px 12px #0001;margin-bottom:18px}
+pre{background:#0f172a;color:#86efac;padding:16px;overflow:auto;border-radius:8px}
+input,button,select{font:inherit;padding:8px;margin:4px}
+button{background:#be123c;color:white;border:0;border-radius:6px;cursor:pointer}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid #e5e7eb;padding:8px;text-align:left}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;color:white}
+.held{background:#15803d}.queued{background:#b45309}.zero{color:#b91c1c;font-weight:700}
+</style>
+<h1>器官分配协调台</h1>
+<p>手术间与麻醉团队按医院、按日限量。提出分配即占位，撤回或器官过期释放并按先到先得递补；容量满后新单排队，入库失败可用相同 client_token 重试而不重复占位。</p>
+<section>
+  <label>用户 <input id="u" value="coordinator"></label>
+  <label>角色 <select id="r"><option>coordinator</option><option>allocation_officer</option><option>hospital</option><option>auditor</option><option>viewer</option></select></label>
+  <label>医院 <input id="h" value="H2" style="width:90px"></label>
+  <button onclick="load()">刷新</button>
+</section>
+<section>
+  <h2>手术间接台容量</h2>
+  <div id="slots">加载中…</div>
+  <form onsubmit="registerSlot(event)" style="margin-top:14px">
+    <input id="sd" type="date"><input id="rooms" type="number" min="1" value="2" title="手术间台数">
+    <input id="teams" type="number" min="1" value="2" title="麻醉团队数（可空）">
+    <button type="submit">医院登记/更新今日容量</button><span id="slotmsg"></span>
+  </form>
+</section>
+<section><h2>原始状态</h2><pre id="o"></pre></section>
+<script>
+function headers(json){let x={'X-User-Id':u.value,'X-Role':r.value};if(r.value==='hospital')x['X-Hospital']=h.value;if(json)x['Content-Type']='application/json';return x}
+function today(){return new Date().toISOString().slice(0,10)}
+sd.value=today();
+function badge(status){return `<span class="badge ${status}">${status==='held'?'占位':status==='queued':'排队':status}</span>`}
+async function load(){
+  let s=await fetch('/api/state',{headers:headers()}).then(r=>r.json());
+  o.textContent=JSON.stringify(s,null,2);
+  if(!s.slots){slots.textContent='当前角色不能查看手术间排期';return}
+  if(!s.slots.length){slots.innerHTML='<em>尚无医院登记容量</em>';return}
+  slots.innerHTML='<table><tr><th>医院</th><th>日期</th><th>手术间</th><th>麻醉团队</th><th>有效容量</th><th>占用</th><th>剩余</th><th>等待中</th></tr>'+
+    s.slots.map(x=>`<tr><td>${x.hospital}</td><td>${x.slot_date}</td><td>${x.room_count}</td><td>${x.anesthesia_team_count??'—'}</td>
+      <td>${x.capacity}</td><td>${x.occupied}</td><td class="${x.remaining===0?'zero':''}">${x.remaining}</td>
+      <td>${x.queued_count}${x.queue.length?'<br>'+x.queue.map(q=>`#${q.position} 单#${q.allocation_id??'-'} ${q.patient_name??'(未入库)'}`).join('<br>'):''}</td></tr>`).join('')+'</table>';
+}
+async function registerSlot(e){
+  e.preventDefault();
+  let body={slot_date:sd.value,room_count:parseInt(rooms.value,10)};
+  if(teams.value)body.anesthesia_team_count=parseInt(teams.value,10);
+  let res=await fetch('/api/slots',{method:'POST',headers:headers(true),body:JSON.stringify(body)});
+  let data=await res.json();
+  slotmsg.textContent=res.ok?`已登记：容量 ${data.capacity}，剩余 ${data.remaining}`:data.message;
+  load();
+}
+load();
+</script>
