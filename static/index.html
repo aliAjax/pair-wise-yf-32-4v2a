@@ -1,3 +1,27 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>器官分配协调台</title>
-<style>body{font:15px system-ui;max-width:1080px;margin:40px auto;background:#f5f7fb;padding:0 20px;color:#172033}section{background:white;padding:20px;border-radius:12px;box-shadow:0 2px 12px #0001}pre{background:#0f172a;color:#86efac;padding:16px;overflow:auto;border-radius:8px}input,button{font:inherit;padding:8px;margin:4px}button{background:#be123c;color:white;border:0;border-radius:6px}</style>
-<h1>器官分配协调台</h1><p>查看当前可用器官、候选患者和分配进度。写操作通过 JSON API 完成，医院接口需携带 X-Hospital。</p><section><input id="u" value="allocator"><input id="r" value="allocation_officer"><button onclick="load()">刷新</button><pre id="o"></pre></section><script>async function load(){let r=await fetch('/api/state',{headers:{'X-User-Id':u.value,'X-Role':r.value}});o.textContent=JSON.stringify(await r.json(),null,2)}load()</script>
+<style>body{font:15px system-ui;max-width:1080px;margin:40px auto;background:#f5f7fb;padding:0 20px;color:#172033}section{background:white;padding:20px;border-radius:12px;box-shadow:0 2px 12px #0001;margin-bottom:20px}pre{background:#0f172a;color:#86efac;padding:16px;overflow:auto;border-radius:8px}input,button{font:inherit;padding:8px;margin:4px}button{background:#be123c;color:white;border:0;border-radius:6px}table{border-collapse:collapse;width:100%;margin-top:8px}th,td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left}th{background:#f1f5f9}.full{color:#be123c;font-weight:600}.ok{color:#15803d;font-weight:600}.muted{color:#64748b}</style>
+<h1>器官分配协调台</h1><p>查看当前可用器官、候选患者、手术间排期与容量。写操作通过 JSON API 完成，医院接口需携带 X-Hospital。</p>
+<section><input id="u" value="allocator"><input id="r" value="allocation_officer"><button onclick="load()">刷新</button><pre id="o"></pre></section>
+<section><h2>手术间排期台</h2><p class="muted">医院登记时段与台数；提出分配时占位，撤回或器官过期时释放，容量满则新分配单排队。</p><div id="board"></div></section>
+<script>
+function headers(){return{'X-User-Id':u.value,'X-Role':r.value}}
+async function load(){
+  let r=await fetch('/api/state',{headers:headers()});
+  o.textContent=JSON.stringify(await r.json(),null,2);
+  let b=await fetch('/api/or-board',{headers:headers()});
+  let d=await b.json();
+  let html='<h3>时段与容量</h3><table><tr><th>医院</th><th>时段</th><th>台数</th><th>已占用</th><th>剩余</th><th>占用中分配单</th></tr>';
+  for(let s of d.slots){
+    let cls=s.remaining>0?'ok':'full';
+    html+=`<tr><td>${s.hospital}</td><td>${s.slot_date} ${s.period}</td><td>${s.capacity}</td><td>${s.held}</td><td class="${cls}">${s.remaining}</td><td>${s.holds.map(h=>'#'+h.allocation_id+' '+h.patient_name+'('+h.alloc_status+')').join('、')||'—'}</td></tr>`;
+  }
+  html+='</table><h3>等待中的分配单</h3>';
+  if(d.queue.length){html+='<table><tr><th>顺位</th><th>分配单</th><th>患者</th><th>器官</th><th>状态</th></tr>';
+    for(let q of d.queue){html+=`<tr><td>${q.position}</td><td>#${q.allocation_id}</td><td>${q.patient_name}</td><td>${q.organ} ${q.blood_type}</td><td>${q.alloc_status}</td></tr>`}
+    html+='</table>';
+  }else html+='<p class="muted">暂无等待中的分配单。</p>';
+  board.innerHTML=html;
+}
+load()
+</script>
+</html>

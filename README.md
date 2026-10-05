@@ -16,8 +16,10 @@ python3 app.py --db organ_allocation.db
 
 - `POST /api/donors`、`POST /api/candidates`：登记器官与候选患者。
 - `GET /api/donors/{id}/ranking`：查看兼容候选排序。
-- `POST /api/allocations`：提出唯一分配。
-- `POST /api/allocations/{id}/accept`、`withdraw`：医院确认或撤回。
+- `POST /api/allocations`：提出唯一分配（可带 `client_token` 幂等重试；容量满时返回 202 排队）。
+- `POST /api/or-slots`：医院登记手术间时段与台数（`slot_date`、`period`、`capacity`）。
+- `GET /api/or-board`：协调台视图，显示各时段已占用、剩余台数和等待中的分配单。
+- `POST /api/allocations/{id}/accept`、`withdraw`：医院确认或撤回（撤回释放占位并顺延排队）。
 - `POST /api/allocations/{id}/transit`、`delay`：冷链转运和延误上报。
 - `POST /api/allocations/{id}/handoff`、`handoff-accept`：来源医院发起、接收医院确认。
 - `POST /api/allocations/{id}/implant`：确认植入。
